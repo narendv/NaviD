@@ -128,7 +128,7 @@ When the bag stops playing, kill the tmux session. -->
 
 
 ### Inference with Guidance
-🚀 **Our method is designed to provide guidance for any diffusion-based navigation model while inferece, improving path generation quality for both PointGoal and ImageGoal tasks. Here, we use [NoMaD](https://github.com/robodhruv/visualnav-transformer) as an example, an adaptable implementation in guide.py is provided for integrating with your own diffusion model.**
+🚀 **Our method is designed to provide guidance for any diffusion-based navigation model while inferece, improving path generation quality for both PointGoal and ImageGoal tasks. Here, we use [NoMaD](https://github.com/robodhruv/visualnav-transformer) as an example, an adaptable implementation in [guide.py](./deployment/src/guide.py) is provided for integrating with your own diffusion model.**
 
 _Make sure to run this script inside the `/deployment/src/` directory._
 
