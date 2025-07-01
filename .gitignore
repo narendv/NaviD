@@ -5,7 +5,7 @@ train/wandb/*
 train/gnm_dataset/*
 *_test.yaml
 
-*.png
+
 *.jpg
 *.pth
 *.mp4
