@@ -4,7 +4,7 @@
 > 🔗 [arXiv](https://arxiv.org/abs/2504.10003) | [Bilibili](https://www.bilibili.com/video/BV1PaLizwEkW/) | [Youtube](https://www.youtube.com/watch?v=94ODPEqyP0s)
 
 <p align="center">
-  <img src="./assets/pipeline.png" alt="Overview" width="60%">
+  <img src="./assets/pipeline.png" width="60%">
 </p>
 
 ---
