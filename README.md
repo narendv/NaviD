@@ -9,6 +9,11 @@
 
 ---
 
+## ✅ TODO List
+
+- [ ] Training code updates
+- [ ] Simulation Envs
+
 ## ⚙️ Setup
 Run the commands below inside the project directory:
 1. Set up the conda environment:
