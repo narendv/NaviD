@@ -36,7 +36,7 @@ Run the commands below inside the project directory:
 5. Install the `depth_anything_v2` package from this [repo](https://github.com/DepthAnything/Depth-Anything-V2):
     ```bash
     git clone https://github.com/DepthAnything/Depth-Anything-V2.git
-    pip install -e Depth-Anything-V2/
+    pip install -r Depth-Anything-V2/requirements.txt 
     ```
 
 ## Data
