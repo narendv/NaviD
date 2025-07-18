@@ -135,10 +135,9 @@ When the bag stops playing, kill the tmux session. -->
 ### Inference with Guidance
 🚀 **Our method is designed to provide guidance for any diffusion-based navigation model while inferece, improving path generation quality for both PointGoal and ImageGoal tasks. Here, we use [NoMaD](https://github.com/robodhruv/visualnav-transformer) as an example, an adaptable implementation in [guide.py](./deployment/src/guide.py) is provided for integrating with your own diffusion model.**
 
-_Make sure to run this script inside the `/deployment/src/` directory._
-
 ```bash
-./navigate.sh --model <model_name> --dir <topomap_dir> --point-goal False  # set --point-goal=True for PointGoal navigation, False for ImageGoal
+cd deployment/src/
+sh ./navigate.sh --model <model_name> --dir <topomap_dir> --point-goal False  # set --point-goal=True for PointGoal navigation, False for ImageGoal
 ```
 
 The `<model_name>` is the name of the model in the `/deployment/config/models.yaml` file. In this file, you specify these parameters of the model for each model (defaults used):
