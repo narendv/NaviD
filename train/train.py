@@ -20,7 +20,6 @@ from diffusers.optimization import get_scheduler
 """
 IMPORT YOUR MODEL HERE
 """
-from vint_train.models.vint.vit import ViT
 from vint_train.models.nomad.nomad import NoMaD, DenseNetwork
 from vint_train.models.nomad.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
