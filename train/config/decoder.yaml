@@ -1,0 +1,33 @@
+# Model parameters
+latent_n_channels: 1280  # EfficientNet-B0 output size
+gaussian_latent_dim: 768  # Dimension of Gaussian latent space
+constant_size: [3, 3]    # Initial constant tensor size in StyleGAN decoder
+loss_type: "l1"    # Options: "l1", "mse", "combined"
+lambda1: 0.5             # L1 loss weight
+lambda2: 0.3             # LPIPS loss weight  
+lambda3: 0.2             # SSIM loss weight
+use_mixed_precision: true
+
+# Training parameters
+batch_size: 64
+num_workers: 12
+lr: 3e-4
+weight_decay: 15e-5
+max_epochs: 200
+min_sequence_length: 1
+image_size: [96, 96]
+dataset_name: "recon"
+
+# Paths
+data_folder: "/data/naren/recon"
+data_split_folder: "/home/naren/NaviD/train/vint_train/data/data_splits/recon"
+output_dir: "/home/naren/NaviD/train/outputs/decoder_model"
+
+# WandB logging
+wandb: true
+wandb_project: "rgb_decoder"
+
+# Training setup
+pretrained: ''
+devices: [0,1]
+precision: "bf16-mixed"

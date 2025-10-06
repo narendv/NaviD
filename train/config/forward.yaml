@@ -1,0 +1,36 @@
+# Model parameters
+d_model: 1280  # Also used in the code
+action_dim: 2
+num_attention_heads: 4
+num_attention_layers: 4
+context_size: 3
+
+# Training parameters
+batch_size: 64
+num_workers: 4
+lr: 8e-5
+weight_decay: 1e-4
+max_epochs: 80
+waypoint_spacing: 1
+min_sequence_length: 10
+image_size: [96, 96]
+dataset_name: "recon"
+
+# Paths
+data_folder: "/data/naren/recon"
+data_split_folder: "/home/naren/NaviD/train/vint_train/data/data_splits/recon"
+output_dir: "/home/naren/NaviD/train/outputs/transition_model"
+
+# Encoder
+enc_config: "config/nomad.yaml"
+enc_checkpoint: "/home/naren/NaviD/checkpoints/nomad.pth"
+encoder_model: null
+use_cache: true  # Set to false to use raw images and load encoder in trainer
+
+# WandB logging
+wandb: true
+wandb_project: "forward_model"
+
+# Training setup
+devices: [0]
+precision: "bf16-mixed"

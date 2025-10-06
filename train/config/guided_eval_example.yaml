@@ -1,0 +1,87 @@
+# Example configuration for guided evaluation
+# This extends the basic eval_example.yaml with guidance-specific settings
+
+project_name: navigation_guided_eval
+run_name: guided_eval_example
+
+# Model configuration (must match training config)
+model_type: nomad  # Currently only NoMaD is supported for guided evaluation
+vision_encoder: nomad_vint
+encoding_size: 256
+context_size: 3
+context_type: temporal
+
+# Evaluation settings
+use_wandb: false  # Set to true if you want to log to wandb
+eval_batch_size: 16  # Smaller batch size recommended for guidance
+gpu_ids: [0]
+num_workers: 0  # Reduced for stability with guidance and avoid LMDB reader limits
+
+# Model architecture (must match training)
+mha_num_attention_heads: 4
+mha_num_attention_layers: 4
+mha_ff_dim_factor: 4
+down_dims: [64, 128, 256]
+num_diffusion_iters: 10
+cond_predict_scale: false
+
+# Data processing parameters (must match training)
+image_size: [96, 96]
+normalize: true
+len_traj_pred: 8
+learn_angle: false
+goal_type: image
+
+# Distance and action bounds (must match training)
+distance:
+  min_dist_cat: 0
+  max_dist_cat: 20
+action:
+  min_dist_cat: 3
+  max_dist_cat: 20
+
+# Goal masking (for NoMaD)
+goal_mask_prob: 0.5
+
+# Guidance-specific settings
+num_samples: 8  # Number of diffusion samples (as in navigate.py)
+compare_guidance: true  # Whether to compare guided vs non-guided
+use_guidance: true  # Use guidance if compare_guidance is false
+
+# Guidance parameters (based on navigate.py)
+guidance:
+  scale_factor: 4.0  # Scale factor for guidance
+  grad_scale: 1.0    # Gradient scale factor
+  interval1: 6       # Guidance interval
+  period: 1          # Guidance period
+  
+# Robot parameters (for guidance cost calculation)
+robot:
+  width: 0.6        # Robot width for collision checking
+  max_v: 1.0        # Maximum velocity
+  max_w: 1.0        # Maximum angular velocity
+  frame_rate: 10    # Control frequency
+
+# Datasets to evaluate on
+datasets:
+  recon:
+    data_folder: /data/naren/recon
+    test: /home/naren/NaviD/train/vint_train/data/data_splits/recon/test
+    end_slack: 3
+    goals_per_obs: 1
+    negative_mining: true
+    waypoint_spacing: 1
+    
+  # Add more datasets as needed
+  # your_dataset:
+  #   data_folder: /path/to/dataset
+  #   test: /path/to/test/split
+  #   end_slack: 0
+  #   goals_per_obs: 1
+  #   negative_mining: true
+
+# Logging and visualization
+print_log_freq: 50    # More frequent for guidance debugging
+wandb_log_freq: 10
+image_log_freq: 500   # Save trajectory comparisons
+num_images_log: 12    # More images for comparison

@@ -3,6 +3,8 @@ train/datasets/*
 train/vint_train/data/data_splits/*
 train/wandb/*
 train/gnm_dataset/*
+train/decoder_examples/*
+train/outputs/*
 *_test.yaml
 
 

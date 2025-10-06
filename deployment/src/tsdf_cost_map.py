@@ -54,7 +54,7 @@ class TsdfCostMap:
 
         self.obs_points = np.asarray(self.obs_pcd.points)
         self.free_points = np.asarray(self.free_pcd.points)
-        print("number of obs points: %d, free points: %d" % (self.obs_points.shape[0], self.free_points.shape[0]))
+        # print("number of obs points: %d, free points: %d" % (self.obs_points.shape[0], self.free_points.shape[0]))
 
     def ReadPointFromFile(self):
         pcd_load = o3d.io.read_point_cloud(os.path.join(self._cfg_general.root_path, self._cfg_general.ply_file))
@@ -107,7 +107,7 @@ class TsdfCostMap:
         self.start_x = (max_x + min_x) / 2.0 - self.num_x / 2.0 * self._cfg_general.resolution
         self.start_y = (max_y + min_y) / 2.0 - self.num_y / 2.0 * self._cfg_general.resolution
 
-        print("tsdf map initialized, with size: %d, %d" % (self.num_x, self.num_y))
+        # print("tsdf map initialized, with size: %d, %d" % (self.num_x, self.num_y))
         self.is_map_ready = True
 
     def zero_single_isolated_ones(self, arr):
@@ -139,7 +139,7 @@ class TsdfCostMap:
         free_map[free_map < self._cfg_tsdf.free_space_threshold] = 0
         # assign obstacles
         free_map[obs_map > self._cfg_tsdf.obstacle_threshold] = 1.0
-        print("occupancy map generation completed.")
+        # print("occupancy map generation completed.")
         # Distance Transform
         tsdf_array = ndimage.distance_transform_edt(free_map)
 

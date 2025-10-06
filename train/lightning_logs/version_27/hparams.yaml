@@ -1,0 +1,10 @@
+latent_n_channels: 1280
+constant_size:
+- 3
+- 3
+lr: 0.001
+weight_decay: 0.00015
+loss_type: l1
+lambda1: 0.5
+lambda2: 0.3
+lambda3: 0.2

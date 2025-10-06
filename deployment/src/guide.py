@@ -6,6 +6,8 @@ from scipy.ndimage import gaussian_filter, distance_transform_edt
 
 import cv2
 import matplotlib.pyplot as plt
+import sys
+sys.path.append('../Depth-Anything-V2')
 from depth_anything_v2.dpt import DepthAnythingV2
 
 import importlib.util
@@ -60,12 +62,8 @@ class PathGuide:
         }
         encoder = 'vits' # or 'vits', 'vitb', 'vitg'
         self.model = DepthAnythingV2(**model_configs[encoder])
-        package_name = 'depth_anything_v2'
-        package_spec = importlib.util.find_spec(package_name)
-        if package_spec is None:
-            raise ImportError(f"Package '{package_name}' not found")
-        package_path = os.path.dirname(package_spec.origin)
-        self.model.load_state_dict(torch.load(os.path.join(package_path, f'../checkpoints/depth_anything_v2_{encoder}.pth'), map_location='cpu'))
+        print(type(self.model))
+        self.model.load_state_dict(torch.load(f'../checkpoints/depth_anything_v2_{encoder}.pth', map_location='cpu'))
         self.model = self.model.to(self.device).eval()
 
         # TSDF init
@@ -104,7 +102,7 @@ class PathGuide:
 
     def depth_to_pcd(self, depth_image, camera_intrinsics, camera_extrinsics, resize_factor=1.0, height_threshold=0.5, max_distance=10.0):
         height, width = depth_image.shape
-        print("height: ", height, "width: ", width)
+        # print("height: ", height, "width: ", width)
         fx, fy = camera_intrinsics[0, 0] * resize_factor, camera_intrinsics[1, 1] * resize_factor
         cx, cy = camera_intrinsics[0, 2] * resize_factor, camera_intrinsics[1, 2] * resize_factor
         

@@ -125,9 +125,9 @@ class NoMaD_ViNT(nn.Module):
         if src_key_padding_mask is not None:
             avg_mask = torch.index_select(self.avg_pool_mask.to(device), 0, no_goal_mask).unsqueeze(-1)
             obs_encoding_tokens = obs_encoding_tokens * avg_mask
-        obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
+        pooled_obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
 
-        return obs_encoding_tokens
+        return pooled_obs_encoding_tokens, obs_encoding_tokens
 
 
 
