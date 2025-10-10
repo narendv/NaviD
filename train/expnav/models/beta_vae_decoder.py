@@ -77,7 +77,8 @@ class BetaVAEDecoder(nn.Module):
                             nn.LeakyReLU(),
                             nn.Conv2d(hidden_dims[-1], out_channels= 3,
                                       kernel_size= 3, padding= 1),
-                            nn.Tanh())
+                            # Removed nn.Sigmoid() - now outputs logits
+                            )
 
     def get_gaussians(self, input: Tensor) -> List[Tensor]:
         """
@@ -120,30 +121,30 @@ class BetaVAEDecoder(nn.Module):
             "log_var": log_var,
         }
 
-    def loss_function(self,
-                      *args,
-                      **kwargs) -> dict:
-        self.num_iter += 1
-        recons = args[0]
-        input = args[1]
-        mu = args[2]
-        log_var = args[3]
-        kld_weight = kwargs['M_N']  # Account for the minibatch samples from the dataset
+    # def loss_function(self,
+    #                   *args,
+    #                   **kwargs) -> dict:
+    #     self.num_iter += 1
+    #     recons = args[0]
+    #     input = args[1]
+    #     mu = args[2]
+    #     log_var = args[3]
+    #     kld_weight = kwargs['M_N']  # Account for the minibatch samples from the dataset
 
-        recons_loss =F.mse_loss(recons, input)
+    #     recons_loss =F.mse_loss(recons, input)
 
-        kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+    #     kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
 
-        if self.loss_type == 'H': # https://openreview.net/forum?id=Sy2fzU9gl
-            loss = recons_loss + self.beta * kld_weight * kld_loss
-        elif self.loss_type == 'B': # https://arxiv.org/pdf/1804.03599.pdf
-            self.C_max = self.C_max.to(input.device)
-            C = torch.clamp(self.C_max/self.C_stop_iter * self.num_iter, 0, self.C_max.data[0])
-            loss = recons_loss + self.gamma * kld_weight* (kld_loss - C).abs()
-        else:
-            raise ValueError('Undefined loss type.')
+    #     if self.loss_type == 'H': # https://openreview.net/forum?id=Sy2fzU9gl
+    #         loss = recons_loss + self.beta * kld_weight * kld_loss
+    #     elif self.loss_type == 'B': # https://arxiv.org/pdf/1804.03599.pdf
+    #         self.C_max = self.C_max.to(input.device)
+    #         C = torch.clamp(self.C_max/self.C_stop_iter * self.num_iter, 0, self.C_max.data[0])
+    #         loss = recons_loss + self.gamma * kld_weight* (kld_loss - C).abs()
+    #     else:
+    #         raise ValueError('Undefined loss type.')
 
-        return {'loss': loss, 'Reconstruction_Loss':recons_loss, 'KLD':kld_loss}
+    #     return {'loss': loss, 'Reconstruction_Loss':recons_loss, 'KLD':kld_loss}
 
     def sample(self,
                num_samples:int,
@@ -171,6 +172,35 @@ class BetaVAEDecoder(nn.Module):
         """
 
         return self.forward(x)[0]
+    
+
+def kl_gaussian_standard_normal(mu, logvar, reduction="mean"):
+    # KL(q(z|x) || N(0, I)) = -0.5 * sum(1 + logvar - mu^2 - exp(logvar))
+    kl = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+    if reduction == "mean":
+        return kl.mean()
+    elif reduction == "sum":
+        return kl.sum()
+    else:
+        return kl  # no reduction
+
+def recon_loss_l1(x_hat, x, reduction="mean"):
+    return F.l1_loss(x_hat, x, reduction=reduction)
+
+def binary_cross_entropy(x_hat, x, reduction="mean"):
+    # Use binary_cross_entropy_with_logits since model now outputs logits
+    return F.binary_cross_entropy_with_logits(x_hat, x, reduction=reduction)
+
+def beta_vae_loss(x_hat, x, mu, logvar, beta=1.0, recon_type="bce"):
+    if recon_type == "l1":
+        rec = recon_loss_l1(x_hat, x, reduction="mean")
+    elif recon_type == "bce":
+        rec = binary_cross_entropy(x_hat, x, reduction="mean")
+    else:
+        raise ValueError("recon_type must be 'l1' or 'bce'")
+    kl  = kl_gaussian_standard_normal(mu, logvar, reduction="mean")
+    loss = rec + beta * kl     # this is the negative ELBO to minimize
+    return loss, rec, kl
 
 if __name__ == "__main__":
     from torchinfo import summary

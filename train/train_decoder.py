@@ -71,9 +71,7 @@ def main(config):
             lr=float(config.lr),
             weight_decay=float(config.weight_decay),
             loss_type=config.loss_type,
-            lambda1=config.lambda1,
-            lambda2=config.lambda2,
-            lambda3=config.lambda3,
+            warmpup_epochs=config.warmup_epochs
         )
 
         # reconfigure optimizer with new lr and weight decay
@@ -101,9 +99,6 @@ def main(config):
             lr=float(config.lr),
             weight_decay=float(config.weight_decay),
             loss_type=config.loss_type,
-            lambda1=config.lambda1,
-            lambda2=config.lambda2,
-            lambda3=config.lambda3,
         )
     
     # Create output directory
@@ -143,7 +138,18 @@ def main(config):
     )
     
     # Train model
-    trainer.fit(model, train_dataloader, val_dataloader)
+    if config.resume:
+            # — resume logic —
+            # if config.resume is True, pass the path to your .ckpt file here;
+            # you’ll need to add `resume_checkpoint` (string) to your config
+            trainer.fit(
+                model,
+                train_dataloaders=train_dataloader,
+                val_dataloaders=val_dataloader,
+                ckpt_path=config.resume_ckpt
+            )
+    else:
+        trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
     
     # Test model
     trainer.test(model, val_dataloader)

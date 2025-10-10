@@ -233,9 +233,10 @@ def preprocess_all_frames(
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     enc = load_encoder(encoder_checkpoint, device)
-    from torchinfo import summary
-    summary(enc, input_size=(2, 3, image_size[0], image_size[1]))
-    hi
+    
+    # from torchinfo import summary
+    # summary(enc, input_size=(2, 3, image_size[0], image_size[1]))
+
     # Build flat index of (traj, t)
     index = build_index(data_folder, split_dir, min_sequence_length=min_sequence_length)
     if len(index) == 0:
@@ -331,7 +332,7 @@ def main():
         split_dir=split_dir,
         out_lmdb_path=out_lmdb,
         image_size=tuple(cfg.image_size),
-        normalize=True,
+        normalize=False,  # Match ViNT training - no ImageNet normalization
         min_sequence_length=cfg.get("min_sequence_length", 1),
         batch_size=args.batch_size,
         num_workers=args.num_workers,

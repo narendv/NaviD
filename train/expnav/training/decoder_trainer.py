@@ -20,9 +20,9 @@ from pytorch_msssim import ssim
 
 # Import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from expnav.models.style_decoder import StyleGanDecoder, RgbHead
-from expnav.models.conv_decoder import ConvDecoder
-from expnav.models.beta_vae_decoder import BetaVAEDecoder
+# from expnav.models.style_decoder import StyleGanDecoder, RgbHead
+# from expnav.models.conv_decoder import ConvDecoder
+from expnav.models.beta_vae_decoder import BetaVAEDecoder, beta_vae_loss
 
 # Ignore FutureWarning
 import warnings
@@ -45,9 +45,7 @@ class DecoderTrainer(pl.LightningModule):
         lr: float = 1e-4,
         weight_decay: float = 1e-4,
         loss_type: str = "combined",  # "l1", "mse", or "combined"
-        lambda1: float = 1.0,  # L1 loss weight
-        lambda2: float = 0.3,  # LPIPS loss weight  
-        lambda3: float = 0.2,  # SSIM loss weight
+        warmup_epochs: int = 10,
     ):
         """
         Initialize the decoder trainer.
@@ -61,7 +59,6 @@ class DecoderTrainer(pl.LightningModule):
             lambda1: Weight for L1 loss component
             lambda2: Weight for LPIPS loss component
             lambda3: Weight for SSIM loss component
-            use_mixed_precision: Whether to use automatic mixed precision
         """
         super().__init__()
         self.save_hyperparameters()
@@ -71,9 +68,7 @@ class DecoderTrainer(pl.LightningModule):
         self.lr = lr
         self.weight_decay = weight_decay
         self.loss_type = loss_type
-        self.lambda1 = lambda1
-        self.lambda2 = lambda2
-        self.lambda3 = lambda3
+        self.warmup_epochs = warmup_epochs
         
         # # Initialize the decoder model
         # self.decoder = StyleGanDecoder(
@@ -127,12 +122,9 @@ class DecoderTrainer(pl.LightningModule):
             Reconstructed RGB image [B, 3, H, W]
         """
         output_dict = self.decoder(encoding)
-        # The decoder returns a dictionary, extract the RGB output
-        # Assuming the key is 'rgb_2' based on the decoder implementation
-        rgb_key = [k for k in output_dict.keys() if k.startswith('rgb_')][0]
-        return output_dict[rgb_key]
+        return output_dict
     
-    def _compute_loss(self, pred_image: torch.Tensor, target_image: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def _compute_loss(self, pred_outputs: Dict[str, torch.Tensor], target_image: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
         Compute reconstruction loss using combined loss function:
         L = λ1 * L1 + λ2 * LPIPS + λ3 * (1 - SSIM)
@@ -145,7 +137,7 @@ class DecoderTrainer(pl.LightningModule):
             Dictionary with loss components
         """
         losses = {}
-        
+        pred_image = pred_outputs['rgb_2']
         if self.loss_type == "combined":
             # L1 loss component
             l1_loss = self.l1_loss(pred_image, target_image)
@@ -156,7 +148,7 @@ class DecoderTrainer(pl.LightningModule):
                 return losses
             
             # Initialize total loss with L1 component
-            total_loss = self.lambda1 * l1_loss
+            total_loss = 1.0 * l1_loss
             
             # LPIPS loss component
             # LPIPS expects images in [-1, 1] range
@@ -166,13 +158,13 @@ class DecoderTrainer(pl.LightningModule):
             
             lpips_loss = self.lpips_loss(pred_lpips, target_lpips).mean()
             losses['lpips_loss'] = lpips_loss
-            total_loss += self.lambda2 * lpips_loss
+            total_loss += 0.3 * lpips_loss
             
             # SSIM loss component
             ssim_value = ssim(pred_image, target_image, data_range=1.0, size_average=True)
             ssim_loss = 1.0 - ssim_value  # Convert to loss (higher SSIM = lower loss)
             losses['ssim_loss'] = ssim_loss
-            total_loss += self.lambda3 * ssim_loss
+            total_loss += 0.2 * ssim_loss
             
             losses['total_loss'] = total_loss
             
@@ -181,10 +173,14 @@ class DecoderTrainer(pl.LightningModule):
             # losses['l1_loss'] = l1_loss
             losses['total_loss'] = l1_loss
             
-        else:  # mse
-            mse_loss = self.mse_loss(pred_image, target_image)
-            # losses['mse_loss'] = mse_loss
-            losses['total_loss'] = mse_loss
+        elif self.loss_type == "elbo":
+            beta = 1.0 if self.current_epoch >= self.warmup_epochs else 0.0
+            mu = pred_outputs['mu']
+            log_var = pred_outputs['log_var']
+            total_loss, rec, kl = beta_vae_loss(pred_image, target_image, mu, log_var, beta=beta, recon_type="bce")
+            losses['total_loss'] = total_loss
+            losses['bce_loss'] = rec
+            losses['kl_loss'] = kl
         
         return losses
     
@@ -299,7 +295,7 @@ class DecoderTrainer(pl.LightningModule):
         if batch_idx == 0:
             with torch.no_grad():
                 self.validation_outputs = {
-                    'pred_image': pred_image[:2].clone().detach().cpu(),
+                    'pred_image': pred_image['rgb_2'][:2].clone().detach().cpu(),
                     'target_image': target_image[:2].clone().detach().cpu()
                 }
 
