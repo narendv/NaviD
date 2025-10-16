@@ -21,15 +21,17 @@ from pytorch_msssim import ssim
 # Import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 # from expnav.models.style_decoder import StyleGanDecoder, RgbHead
-from expnav.models.conv_decoder import ConvDecoder
+from expnav.models.conv_decoder2 import ConvDecoder
 # from expnav.models.beta_vae_decoder import BetaVAEDecoder, beta_vae_loss
+from efficientnet_pytorch import EfficientNet
+from vint_train.models.nomad.nomad_vint import replace_bn_with_gn
 
 # Ignore FutureWarning
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
-class DecoderTrainer(pl.LightningModule):
+class E2ETrainer(pl.LightningModule):
     """
     PyTorch Lightning module for training RGB decoder models.
     
@@ -38,11 +40,10 @@ class DecoderTrainer(pl.LightningModule):
     
     def __init__(
         self,
+        encoder_checkpoint_path: str,
         latent_n_channels: int = 1280,  # EfficientNet-B0 output size
-        gaussian_dim: int = 768,  # Dimension of Gaussian latent space
-        constant_size: Tuple[int, int] = (3, 3),  # Initial constant tensor size
         lr: float = 1e-4,
-        weight_decay: float = 1e-4,
+        weight_decay: float = 0.0,
         loss_type: str = "combined",  # "l1", "mse", or "combined"
         warmup_epochs: int = 10,
     ):
@@ -68,6 +69,10 @@ class DecoderTrainer(pl.LightningModule):
         self.weight_decay = weight_decay
         self.loss_type = loss_type
         self.warmup_epochs = warmup_epochs
+
+        # Initialize encoder if not using cache
+        self.encoder = None
+        self.encoder = self._load_encoder(encoder_checkpoint_path)
         
         # # Initialize the decoder model
         # self.decoder = StyleGanDecoder(
@@ -76,22 +81,17 @@ class DecoderTrainer(pl.LightningModule):
         #     constant_size=constant_size,
         # )
 
-        # self.decoder = ConvDecoder(
-        #     latent_n_channels=latent_n_channels,
-        #     base_channels=256,
-        #     initial_spatial_size=6,
-        # )
+        self.decoder = ConvDecoder(
+            latent_n_channels=latent_n_channels,
+            base_channels=512,
+            # initial_spatial_size=3,
+        )
 
         # self.decoder = BetaVAEDecoder(
         #     input_dim=latent_n_channels,
         #     latent_dim=gaussian_dim,
         #     loss_type='l1'
         # )
-        self.decoder = ConvDecoder(
-            latent_n_channels=1280,
-            base_channels=512,
-            initial_spatial_size=3,
-        )
         self.decoder = torch.compile(self.decoder)
         
         # For logging validation images
@@ -115,8 +115,36 @@ class DecoderTrainer(pl.LightningModule):
             print("LPIPS loss initialized")
         else:
             self.lpips_loss = None
+
+    def _load_encoder(self, checkpoint_path: str) -> nn.Module:
+        """Load and initialize the EfficientNet encoder."""
+        # Create encoder
+        encoder = EfficientNet.from_name("efficientnet-b0", in_channels=3)
+        encoder = replace_bn_with_gn(encoder)
+        
+        # Load checkpoint
+        print(f"Loading encoder weights from {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, weights_only=True, map_location='cpu')
+        
+        # Filter encoder parameters
+        encoder_state_dict = {}
+        for k, v in checkpoint.items():
+            if k.startswith('vision_encoder.obs_encoder'):
+                new_key = k[len('vision_encoder.obs_encoder.'):]
+                encoder_state_dict[new_key] = v
+        
+        # Load state dict
+        encoder.load_state_dict(encoder_state_dict, strict=True)
+        print("Successfully loaded encoder weights.")
+        
+        # Set to eval mode (we don't want to train the encoder)
+        encoder.eval()
+        for param in encoder.parameters():
+            param.requires_grad = False
+        
+        return encoder
     
-    def forward(self, encoding: torch.Tensor) -> torch.Tensor:
+    def forward(self, images: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the decoder.
         
@@ -126,8 +154,15 @@ class DecoderTrainer(pl.LightningModule):
         Returns:
             Reconstructed RGB image [B, 3, H, W]
         """
-        output_dict = self.decoder(encoding)
-        return output_dict
+        encodings = self.encoder.extract_endpoints(images)
+        # feats = encodings['reduction_6']  # [B, 1280, 3, 3]
+        # feats = self.encoder._avg_pooling(feats)
+        # feats = torch.flatten(feats, 1)
+        # encodings = self.decoder(feats, encodings)
+
+        feats = encodings['reduction_4']  # [B, 1280, 3, 3]
+        encodings = self.decoder(feats)
+        return encodings
     
     def _compute_loss(self, pred_outputs: Dict[str, torch.Tensor], target_image: torch.Tensor) -> Dict[str, torch.Tensor]:
         """
@@ -245,14 +280,13 @@ class DecoderTrainer(pl.LightningModule):
             Loss dictionary
         """
         # Get batch data
-        encoding = batch['encoding']  # [B, 1280]
-        target_image = batch['target_image']  # [B, 3, H, W]
+        input_image = batch['image']  # [B, 3, H, W]
         
         # Forward pass
-        pred_outputs = self(encoding)
+        pred_outputs = self(input_image)
         
         # Compute loss
-        losses = self._compute_loss(pred_outputs, target_image)
+        losses = self._compute_loss(pred_outputs, input_image)
 
         # Log metrics
         for loss_name, loss_value in losses.items():
@@ -272,17 +306,16 @@ class DecoderTrainer(pl.LightningModule):
             Loss dictionary
         """
         # Get batch data
-        encoding = batch['encoding']  # [B, 1280]
-        target_image = batch['target_image']  # [B, 3, H, W]
+        input_image = batch['image']  # [B, 3, H, W]
         
         # Forward pass
-        pred_outputs = self(encoding)
+        pred_outputs = self(input_image)
         
         # Compute loss
-        losses = self._compute_loss(pred_outputs, target_image)
+        losses = self._compute_loss(pred_outputs, input_image)
         pred_image = (pred_outputs['rgb_2'] + 1.0) / 2.0  # Convert [-1, 1] to [0, 1]
         if 'l1' not in losses:
-            l1_loss = self.l1_loss(pred_image, target_image)
+            l1_loss = self.l1_loss(pred_image, input_image)
             losses['l1_loss'] = l1_loss
         
         # # Calculate additional metrics
@@ -308,7 +341,7 @@ class DecoderTrainer(pl.LightningModule):
             with torch.no_grad():
                 self.validation_outputs = {
                     'pred_image': pred_image[:2].clone().detach().cpu(),
-                    'target_image': target_image[:2].clone().detach().cpu()
+                    'target_image': input_image[:2].clone().detach().cpu()
                 }
 
         return {
@@ -342,18 +375,17 @@ class DecoderTrainer(pl.LightningModule):
             Loss dictionary
         """
         # Get batch data
-        encoding = batch['encoding']  # [B, 1280]
-        target_image = batch['target_image']  # [B, 3, H, W]
+        input_image = batch['image']  # [B, 3, H, W]
         
         # Forward pass
-        pred_outputs = self(encoding)
+        pred_outputs = self(input_image)
         
         # Compute loss
-        losses = self._compute_loss(pred_outputs, target_image)
+        losses = self._compute_loss(pred_outputs, input_image)
 
         # Calculate additional metrics
         with torch.no_grad():
-            mse = F.mse_loss(pred_outputs['rgb_2'], target_image)
+            mse = F.mse_loss(pred_outputs['rgb_2'], input_image)
             psnr = 20 * torch.log10(1.0 / torch.sqrt(mse + 1e-8))
             
             # pred_flat = pred_image.view(pred_image.size(0), -1)
@@ -407,3 +439,16 @@ class DecoderTrainer(pl.LightningModule):
             gradient_clip_val=1.0,  # Clip gradients to max norm of 1.0
             gradient_clip_algorithm="norm"
         )
+
+if __name__ == "__main__":
+    
+    # Create model
+    model = E2ETrainer(
+        encoder_checkpoint_path='/home/naren/NaviD/checkpoints/nomad.pth',
+        latent_n_channels=112,
+    )
+    
+    input = torch.randn((2, 3, 96, 96))
+    out = model(input)
+    for k, v in out.items():
+        print(f"{k}: {v.shape}")

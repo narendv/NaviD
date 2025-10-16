@@ -1,0 +1,5 @@
+[default]
+entity = vd2307-nyu
+project = rgb_decoder
+base_url = https://api.wandb.ai
+

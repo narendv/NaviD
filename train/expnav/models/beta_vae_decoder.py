@@ -18,7 +18,7 @@ class BetaVAEDecoder(nn.Module):
                  gamma:float = 1000.,
                  max_capacity: int = 25,
                  Capacity_max_iter: int = 1e5,
-                 loss_type:str = 'B',
+                 loss_type:str = 'l1',
                  **kwargs) -> None:
         super(BetaVAEDecoder, self).__init__()
 
@@ -77,7 +77,7 @@ class BetaVAEDecoder(nn.Module):
                             nn.LeakyReLU(),
                             nn.Conv2d(hidden_dims[-1], out_channels= 3,
                                       kernel_size= 3, padding= 1),
-                            # Removed nn.Sigmoid() - now outputs logits
+                            nn.Tanh()  # Use Tanh for stable gradients, outputs in [-1, 1]
                             )
 
     def get_gaussians(self, input: Tensor) -> List[Tensor]:
@@ -191,11 +191,17 @@ def binary_cross_entropy(x_hat, x, reduction="mean"):
     # Use binary_cross_entropy_with_logits since model now outputs logits
     return F.binary_cross_entropy_with_logits(x_hat, x, reduction=reduction)
 
-def beta_vae_loss(x_hat, x, mu, logvar, beta=1.0, recon_type="bce"):
+def beta_vae_loss(x_hat, x, mu, logvar, beta=1.0, recon_type="l1"):
+    # Handle Tanh output: convert from [-1, 1] to [0, 1] to match target range
+    if x_hat.min() < -0.1:  # Check if output is in [-1, 1] range (Tanh output)
+        x_hat_normalized = (x_hat + 1.0) / 2.0  # Convert [-1, 1] to [0, 1]
+    else:
+        x_hat_normalized = x_hat  # Already in [0, 1] range
+    
     if recon_type == "l1":
-        rec = recon_loss_l1(x_hat, x, reduction="mean")
+        rec = recon_loss_l1(x_hat_normalized, x, reduction="mean")
     elif recon_type == "bce":
-        rec = binary_cross_entropy(x_hat, x, reduction="mean")
+        rec = binary_cross_entropy(x_hat_normalized, x, reduction="mean")
     else:
         raise ValueError("recon_type must be 'l1' or 'bce'")
     kl  = kl_gaussian_standard_normal(mu, logvar, reduction="mean")

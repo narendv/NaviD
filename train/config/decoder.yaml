@@ -1,31 +1,32 @@
 # Model parameters
-latent_n_channels: 1280  # EfficientNet-B0 output size
-gaussian_latent_dim: 768  # Dimension of Gaussian latent space
-constant_size: [3, 3]    # Initial constant tensor size in StyleGAN decoder
-loss_type: "elbo"    # Options: "l1", "mse", "combined"
+latent_n_channels: 112  # EfficientNet-B0 output size: 1280
+gaussian_latent_dim: None  # Dimension of Gaussian latent space
+constant_size: None    # Initial constant tensor size in StyleGAN decoder
+loss_type: "l1"    # Options: "l1", "mse", "combined"
 
 # Training parameters
 batch_size: 64
-num_workers: 4
+num_workers: 8
 lr: 2e-4
-weight_decay: 15e-5
-max_epochs: 200
-warmup_epochs: 50
+weight_decay: 1e-4
+max_epochs: 100
+warmup_epochs: None  # Reduced warmup for faster KL annealing
 min_sequence_length: 1
 image_size: [96, 96]
 dataset_name: "recon"
 
 # Paths
-data_folder: "/data/naren/recon"
+encoder_checkpoint_path: "/home/naren/NaviD/checkpoints/nomad.pth"
+data_folder: "/home/naren/recon"
 data_split_folder: "/home/naren/NaviD/train/vint_train/data/data_splits/recon"
 output_dir: "/home/naren/NaviD/train/outputs/decoder_model"
 
 # WandB logging
-wandb: falses
+wandb: true
 wandb_project: "rgb_decoder"
 
 # Training setup
 pretrained: ''
 resume: ''
-devices: [0]
+devices: "auto"
 precision: "bf16-mixed"

@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/home/naren/NaviD/train")
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -5,6 +8,8 @@ import torchvision
 from typing import List, Dict, Optional, Tuple, Callable
 from efficientnet_pytorch import EfficientNet
 from vint_train.models.vint.self_attention import PositionalEncoding
+from diffusers.models import AutoencoderKL
+
 
 class NoMaD_ViNT(nn.Module):
     def __init__(
@@ -30,6 +35,12 @@ class NoMaD_ViNT(nn.Module):
             self.obs_encoder = replace_bn_with_gn(self.obs_encoder)
             self.num_obs_features = self.obs_encoder._fc.in_features
             self.obs_encoder_type = "efficientnet"
+        elif obs_encoder == "vae":
+            self.obs_encoder = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-ema")
+            self.obs_encoder.requires_grad_(False) # freeze VAE weights
+            self.obs_encoder.eval() # set to eval mode
+            self.obs_encoder_type = "vae"
+            self.num_obs_features = self.obs_encoder.latent_channels * 16 * 16
         else:
             raise NotImplementedError
         
@@ -75,10 +86,6 @@ class NoMaD_ViNT(nn.Module):
 
         # Initialize the goal encoding
         goal_encoding = torch.zeros((obs_img.size()[0], 1, self.goal_encoding_size)).to(device)
-        
-        # Get the input goal mask 
-        if input_goal_mask is not None:
-            goal_mask = input_goal_mask.to(device)
 
         # Get the goal encoding
         obsgoal_img = torch.cat([obs_img[:, 3*self.context_size:, :, :], goal_img], dim=1) # concatenate the obs image/context and goal image --> non image goal?
@@ -99,19 +106,28 @@ class NoMaD_ViNT(nn.Module):
         obs_img = torch.split(obs_img, 3, dim=1)
         obs_img = torch.concat(obs_img, dim=0)
 
-        obs_encoding = self.obs_encoder.extract_features(obs_img)
-        obs_encoding = self.obs_encoder._avg_pooling(obs_encoding)
-        if self.obs_encoder._global_params.include_top:
+
+        if self.obs_encoder_type == "efficientnet":
+            obs_encoding = self.obs_encoder.extract_features(obs_img)
+            obs_encoding = self.obs_encoder._avg_pooling(obs_encoding)
+            if self.obs_encoder._global_params.include_top:
+                obs_encoding = obs_encoding.flatten(start_dim=1)
+                obs_encoding = self.obs_encoder._dropout(obs_encoding)
+            obs_encoding = self.compress_obs_enc(obs_encoding)
+            obs_encoding = obs_encoding.unsqueeze(1)
+            obs_encoding = obs_encoding.reshape((self.context_size+1, -1, self.obs_encoding_size))
+            obs_encoding = torch.transpose(obs_encoding, 0, 1)
+        elif self.obs_encoder_type == "vae":
+            obs_encoding = self.obs_encoder.encode(obs_img).latent_dist.sample()
             obs_encoding = obs_encoding.flatten(start_dim=1)
-            obs_encoding = self.obs_encoder._dropout(obs_encoding)
-        obs_encoding = self.compress_obs_enc(obs_encoding)
-        obs_encoding = obs_encoding.unsqueeze(1)
-        obs_encoding = obs_encoding.reshape((self.context_size+1, -1, self.obs_encoding_size))
-        obs_encoding = torch.transpose(obs_encoding, 0, 1)
+            obs_encoding = self.compress_obs_enc(obs_encoding)
+            obs_encoding = obs_encoding.reshape((self.context_size+1, -1, self.obs_encoding_size))
+            obs_encoding = torch.transpose(obs_encoding, 0, 1)
         obs_encoding = torch.cat((obs_encoding, goal_encoding), dim=1)
         
         # If a goal mask is provided, mask some of the goal tokens
-        if goal_mask is not None:
+        if input_goal_mask is not None:
+            goal_mask = input_goal_mask.to(device)
             no_goal_mask = goal_mask.long()
             src_key_padding_mask = torch.index_select(self.all_masks.to(device), 0, no_goal_mask)
         else:
@@ -184,6 +200,17 @@ def replace_submodules(
         if predicate(m)]
     assert len(bn_list) == 0
     return root_module
+
+
+# if __name__ == "__main__":
+#     model = NoMaD_ViNT(context_size=3, obs_encoder="vae").to("cuda")
+#     from torchinfo import summary
+#     input_obs = torch.randn((2, 3*4, 128, 128)).to("cuda")
+#     input_goal = torch.randn((2, 3, 128, 128)).to("cuda")
+#     out, out_tokens = model(input_obs, input_goal)
+#     print(out.shape, out_tokens.shape)
+#     summary(model, input_data=(input_obs, input_goal))
+
 
 
 
