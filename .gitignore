@@ -1,4 +1,5 @@
 train/logs/*
+train/lightning_logs/*
 train/datasets/*
 train/vint_train/data/data_splits/*
 train/wandb/*

@@ -1,10 +1,22 @@
+# Ignore FutureWarning
+import warnings
+from pydantic.warnings import UnsupportedFieldAttributeWarning
+warnings.simplefilter("error", UnsupportedFieldAttributeWarning)
+# The pydantic library emits UnsupportedFieldAttributeWarning in some setups; treat as ignore to avoid import-time errors
+# warnings.filterwarnings("ignore", category=UnsupportedFieldAttributeWarning)
+
 import os
+import sys
 import wandb
 import argparse
 import numpy as np
 import yaml
 import time
 import pdb
+
+# Add the diffusion_policy submodule to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'submodules', 'diffusion_policy'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'submodules'))
 
 import torch
 import torch.nn as nn
@@ -363,7 +375,6 @@ if __name__ == "__main__":
     )
 
     if config["use_wandb"]:
-        wandb.login()
         wandb.init(
             project=config["project_name"],
             settings=wandb.Settings(start_method="fork"),

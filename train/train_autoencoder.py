@@ -12,8 +12,8 @@ from torch.utils.data import DataLoader
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
 
-from expnav.training.decoder_trainer import DecoderTrainer
-from expnav.data.decoder_dataset import DecoderDataset, lmdb_worker_init
+from expnav.training.decoder_trainer_e2e import E2ETrainer
+from expnav.data.autoenc_dataset import AutoEncDataset
 from easydict import EasyDict
 
 # use medium precision for training
@@ -24,20 +24,18 @@ def main(config):
     """Train the decoder model."""
     
     # Create data module
-    train_dataset = DecoderDataset(
+    train_dataset = AutoEncDataset(
         data_folder=config.data_folder,
         data_split_folder=f"{config.data_split_folder}/train",
         dataset_name=config.dataset_name,
         image_size=config.image_size,
-        min_sequence_length=config.min_sequence_length,
     )
 
-    val_dataset = DecoderDataset(
+    val_dataset = AutoEncDataset(
         data_folder=config.data_folder,
         data_split_folder=f"{config.data_split_folder}/test",
         dataset_name=config.dataset_name,
         image_size=config.image_size,
-        min_sequence_length=config.min_sequence_length,
         downscale_factor=10,  # Downsample validation set for speed
     )
     
@@ -47,10 +45,7 @@ def main(config):
         shuffle=True,
         num_workers=config.num_workers,
         pin_memory=True,
-        persistent_workers=True,
         prefetch_factor=2,
-        worker_init_fn=lmdb_worker_init,  # (2)
-        # multiprocessing_context='spawn' if config.num_workers > 0 else None,
     )
     
     val_dataloader = DataLoader(
@@ -59,16 +54,13 @@ def main(config):
         shuffle=False,
         num_workers=config.num_workers,
         pin_memory=True,
-        persistent_workers=True,
         prefetch_factor=2,
-        worker_init_fn=lmdb_worker_init,  # (2)
-        # multiprocessing_context='spawn' if config.num_workers > 0 else None,
     )
     
     # Create model
     if config.pretrained:
         print(f"Loading pretrained model from {config.pretrained}")
-        model = DecoderTrainer.load_from_checkpoint(
+        model = E2ETrainer.load_from_checkpoint(
             checkpoint_path=config.pretrained,
             latent_n_channels=config.latent_n_channels,
             constant_size=config.constant_size,
@@ -93,13 +85,12 @@ def main(config):
             # )
             # return [optimizer], [scheduler]
             return [optimizer]
-        model.configure_optimizers = _new_opt.__get__(model, DecoderTrainer)
+        model.configure_optimizers = _new_opt.__get__(model, E2ETrainer)
 
     else:
-        model = DecoderTrainer(
+        model = E2ETrainer(
+            encoder_checkpoint_path=config.encoder_checkpoint_path,
             latent_n_channels=config.latent_n_channels,
-            gaussian_dim=config.gaussian_latent_dim,
-            constant_size=config.constant_size,
             lr=float(config.lr),
             weight_decay=float(config.weight_decay),
             loss_type=config.loss_type,
@@ -144,9 +135,6 @@ def main(config):
     
     # Train model
     if config.resume:
-            # — resume logic —
-            # if config.resume is True, pass the path to your .ckpt file here;
-            # you’ll need to add `resume_checkpoint` (string) to your config
             trainer.fit(
                 model,
                 train_dataloaders=train_dataloader,

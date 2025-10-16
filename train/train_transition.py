@@ -12,8 +12,8 @@ from torch.utils.data import DataLoader
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
 
-from vint_train.training.transition_model_trainer import TransitionModelTrainer
-from vint_train.data.transition_dataset import TransitionDataset
+from expnav.training.transition_model_trainer import TransitionModelTrainer
+from expnav.data.transition_dataset import TransitionDataset
 from easydict import EasyDict
 
 # use medium precision for training
